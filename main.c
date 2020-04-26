@@ -53,7 +53,7 @@ static int rule_cb(struct mbuf *buffer)
     return 0;
 }
 
-static void my_handler(int s){
+static void nflog_cleanup(int s){
     char *dns_nflog_rule[] = {"iptables", "-D", "INPUT", "-i", "wlp61s0", "-p" ,"udp", "--sport", "53", "-j", "NFLOG", "--nflog-group", "1234", NULL};
 
     exec_proccess(dns_nflog_rule, false, rule_cb);
@@ -69,7 +69,7 @@ int main(int argc, char **argv)
     char *dns_nflog_rule[] = {"iptables", "-A", "INPUT", "-i", "wlp61s0", "-p" ,"udp", "--sport", "53", "-j", "NFLOG", "--nflog-group", "1234", NULL};
     struct sigaction sigIntHandler;
 
-    sigIntHandler.sa_handler = my_handler;
+    sigIntHandler.sa_handler = nflog_cleanup;
     sigemptyset(&sigIntHandler.sa_mask);
     sigIntHandler.sa_flags = 0;
 
