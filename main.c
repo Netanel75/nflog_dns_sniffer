@@ -6,6 +6,10 @@
 #include <netinet/ip.h>
 #include <libnetfilter_log/libnetfilter_log.h>
 #include <parse_dns.h>
+#include <stdbool.h>
+#include <signal.h>
+
+#include "exec_lib.h"
 
 static int print_pkt(struct nflog_data *ldata)
 {
@@ -41,59 +45,83 @@ static int cb(struct nflog_g_handle *gh, struct nfgenmsg *nfmsg,
          return 0;
 }
 
+static int rule_cb(struct mbuf *buffer)
+{
+    if (buffer && buffer->buf) {
+        printf("%s\n", buffer->buf);
+    }
+    return 0;
+}
+
+static void my_handler(int s){
+    char *dns_nflog_rule[] = {"iptables", "-D", "INPUT", "-i", "wlp61s0", "-p" ,"udp", "--sport", "53", "-j", "NFLOG", "--nflog-group", "1234", NULL};
+
+    exec_proccess(dns_nflog_rule, false, rule_cb);
+}
+
 
 int main(int argc, char **argv)
 {
-         struct nflog_handle *h;
-         struct nflog_g_handle *qh1234;
-         int rv, fd;
-         char buf[4096];
+    struct nflog_handle *h;
+    struct nflog_g_handle *qh1234;
+    int rv, fd;
+    char buf[4096];
+    char *dns_nflog_rule[] = {"iptables", "-A", "INPUT", "-i", "wlp61s0", "-p" ,"udp", "--sport", "53", "-j", "NFLOG", "--nflog-group", "1234", NULL};
+    struct sigaction sigIntHandler;
 
-         h = nflog_open();
-         if (!h) {
-                 fprintf(stderr, "error during nflog_open()\n");
-                 exit(1);
-         }
+    sigIntHandler.sa_handler = my_handler;
+    sigemptyset(&sigIntHandler.sa_mask);
+    sigIntHandler.sa_flags = 0;
 
-         printf("unbinding existing nf_log handler for AF_INET (if any)\n");
-         if (nflog_unbind_pf(h, AF_INET) < 0) {
-                 fprintf(stderr, "error nflog_unbind_pf()\n");
-                 exit(1);
-         }
+    sigaction(SIGINT, &sigIntHandler, NULL);
 
-         printf("binding nfnetlink_log to AF_INET\n");
-         if (nflog_bind_pf(h, AF_INET) < 0) {
-                 fprintf(stderr, "error during nflog_bind_pf()\n");
-                 exit(1);
-         }
+    exec_proccess(dns_nflog_rule, false, rule_cb);
 
-         printf("binding this socket to group 1234\n");
-         qh1234 = nflog_bind_group(h, 1234);
-         if (!qh1234) {
-                 fprintf(stderr, "no handle for group 1234\n");
-                 exit(1);
-         }
-
-        if (nflog_callback_register(qh1234, cb, NULL) < 0) {
+    h = nflog_open();
+    if (!h) {
+            fprintf(stderr, "error during nflog_open()\n");
             exit(1);
-        }
+    }
 
-         fd = nflog_fd(h);
+    printf("unbinding existing nf_log handler for AF_INET (if any)\n");
+    if (nflog_unbind_pf(h, AF_INET) < 0) {
+            fprintf(stderr, "error nflog_unbind_pf()\n");
+            exit(1);
+    }
 
-         printf("going into main loop\n");
-         while ((rv = recv(fd, buf, sizeof(buf), 0)) && rv >= 0) {
-                 printf("pkt received (len=%u)\n", rv);
+    printf("binding nfnetlink_log to AF_INET\n");
+    if (nflog_bind_pf(h, AF_INET) < 0) {
+            fprintf(stderr, "error during nflog_bind_pf()\n");
+            exit(1);
+    }
 
-                 /* handle messages in just-received packet */
-                 nflog_handle_packet(h, buf, rv);
-         }
+    printf("binding this socket to group 1234\n");
+    qh1234 = nflog_bind_group(h, 1234);
+    if (!qh1234) {
+            fprintf(stderr, "no handle for group 1234\n");
+            exit(1);
+    }
 
-         printf("unbinding from group 100\n");
-         nflog_unbind_group(qh1234);
-         printf("unbinding from group 0\n");
+    if (nflog_callback_register(qh1234, cb, NULL) < 0) {
+    exit(1);
+    }
 
-         printf("closing handle\n");
-         nflog_close(h);
+    fd = nflog_fd(h);
 
-         return EXIT_SUCCESS;
+    printf("going into main loop\n");
+    while ((rv = recv(fd, buf, sizeof(buf), 0)) && rv >= 0) {
+            printf("pkt received (len=%u)\n", rv);
+
+            /* handle messages in just-received packet */
+            nflog_handle_packet(h, buf, rv);
+    }
+
+    printf("unbinding from group 100\n");
+    nflog_unbind_group(qh1234);
+    printf("unbinding from group 0\n");
+
+    printf("closing handle\n");
+    nflog_close(h);
+
+    return EXIT_SUCCESS;
 }
