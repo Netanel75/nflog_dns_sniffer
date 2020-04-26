@@ -9,6 +9,7 @@ resolv = cc.find_library('resolv')
 srcs = [
     'main.c',
     'parse_dns.c',
+    'nflog_utils.c',
     #####this should be in different library######
     'event_loop/exec_lib.c',
     'event_loop/mbuf.c'

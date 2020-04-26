@@ -10,6 +10,7 @@
 #include <signal.h>
 
 #include "exec_lib.h"
+#include "nflog_utils.h"
 
 static int print_pkt(struct nflog_data *ldata)
 {
@@ -77,36 +78,10 @@ int main(int argc, char **argv)
 
     exec_proccess(dns_nflog_rule, false, rule_cb);
 
-    h = nflog_open();
-    if (!h) {
-            fprintf(stderr, "error during nflog_open()\n");
-            exit(1);
+    fd = attach_cb(&qh1234, &h, cb, 1234);
+    if (fd < 0) {
+        return EXIT_FAILURE;
     }
-
-    printf("unbinding existing nf_log handler for AF_INET (if any)\n");
-    if (nflog_unbind_pf(h, AF_INET) < 0) {
-            fprintf(stderr, "error nflog_unbind_pf()\n");
-            exit(1);
-    }
-
-    printf("binding nfnetlink_log to AF_INET\n");
-    if (nflog_bind_pf(h, AF_INET) < 0) {
-            fprintf(stderr, "error during nflog_bind_pf()\n");
-            exit(1);
-    }
-
-    printf("binding this socket to group 1234\n");
-    qh1234 = nflog_bind_group(h, 1234);
-    if (!qh1234) {
-            fprintf(stderr, "no handle for group 1234\n");
-            exit(1);
-    }
-
-    if (nflog_callback_register(qh1234, cb, NULL) < 0) {
-    exit(1);
-    }
-
-    fd = nflog_fd(h);
 
     printf("going into main loop\n");
     while ((rv = recv(fd, buf, sizeof(buf), 0)) && rv >= 0) {
